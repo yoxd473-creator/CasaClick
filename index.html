@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Inmobiliaria Santa Cruz — Demo 360° (Prototipo)</title>
+
+<!-- Leaflet + MarkerCluster (mapa sigue disponible) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster-src.js"></script>
+
+<!-- Pannellum (visor 360 simple, cliente) -->
+<link rel="stylesheet" href="https://pannellum.org/css/pannellum.css" />
+<script src="https://pannellum.org/js/pannellum.js"></script>
+
+<style>
+:root{--bg:#f4f7fb;--card:#fff;--muted:#55607a;--primary:#0f6ef0;--accent:#7c3aed;--danger:#ef4444;--shadow:0 10px 30px rgba(2,6,23,.06)}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,Arial,sans-serif;background:var(--bg);color:#071025}
+.header{background:linear-gradient(90deg,var(--primary),var(--accent));color:#fff;padding:16px}
+.header h1{margin:0;font-size:18px}
+header p{margin:6px 0 0 0;font-size:13px;opacity:.95}
+.container{max-width:1150px;margin:18px auto;padding:12px}
+.card{background:var(--card);padding:12px;border-radius:12px;box-shadow:var(--shadow)}
+#map{height:420px;border-radius:12px;border:1px solid #e8eef7}
+.grid-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:12px}
+.prop{border-radius:10px;overflow:hidden;background:#fff;box-shadow:var(--shadow);display:flex;flex-direction:column}
+.prop img{width:100%;height:180px;object-fit:cover}
+.prop .body{padding:12px;display:flex;flex-direction:column;gap:6px}
+.title{font-weight:700}
+.meta{color:var(--muted);font-size:13px}
+.price{color:var(--primary);font-weight:800}
+.actions{display:flex;gap:8px;align-items:center;margin-top:auto;flex-wrap:wrap}
+.whatsapp{background:#25d366;color:white;padding:8px 10px;border-radius:8px;border:0;cursor:pointer}
+.fab{position:relative;background:linear-gradient(90deg,var(--primary),var(--accent));color:white;border-radius:999px;padding:10px 12px;border:0;font-weight:800;cursor:pointer;box-shadow:0 12px 30px rgba(2,6,23,.14)}
+.fab-floating{position:fixed;right:18px;bottom:18px}
+.modal-back{position:fixed;inset:0;background:rgba(2,6,23,.45);display:none;align-items:center;justify-content:center;padding:12px;z-index:999}
+.modal{width:100%;max-width:920px;background:var(--card);border-radius:12px;padding:14px;box-shadow:0 12px 40px rgba(2,6,23,.2);max-height:92vh;overflow:auto}
+.input, textarea, select{width:100%;padding:10px;border-radius:8px;border:1px solid #e6e9ef;background:white}
+.helper{font-size:13px;color:var(--muted)}
+.badge{display:inline-block;padding:6px 10px;border-radius:999px;background:#eef6ff;color:var(--primary);font-weight:700}
+.error{background:#fee2e2;color:#7f1d1d;padding:10px;border-radius:8px;margin-bottom:10px;display:none}
+.filter-bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.small-btn{padding:8px 10px;border-radius:8px;border:1px solid #e6e9ef;background:white;cursor:pointer}
+
+/* pannellum modal specifics */
+#pannellumModal .modal{max-width:1200px;width:95%;height:85vh;padding:0}
+#panorama { width:100%; height:74vh; display:block; border-radius:8px 8px 0 0; overflow:hidden; background:#000 }
+#pano-controls { padding:10px; display:flex; justify-content:space-between; align-items:center; gap:8px; background: #fff; border-radius:0 0 8px 8px; }
+#sceneThumbs { display:flex; gap:8px; align-items:center; overflow-x:auto; padding:6px 0; }
+.scene-thumb { width:88px; height:56px; object-fit:cover; border-radius:6px; cursor:pointer; border:2px solid transparent }
+.scene-thumb.active { border-color: var(--primary) }
+</style>
+</head>
+<body>
+<header class="header">
+  <h1>Pagina web para la promoción y venta de bienes raíces</h1>
+  <p>Proyecto BTH · Nicolás Peredo · José Ernesto Barrientos</p>
+</header>
+
+<main class="container">
+  <div id="errorBox" class="error" role="alert" style="display:none"></div>
+
+  <!-- Top controls -->
+  <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px">
+    <div>
+      <strong>Prototipo con Visor 360° — Santa Cruz</strong>
+      <div class="helper">Ejemplo: una sola propiedad con recorrido 360 por las habitaciones (demo).</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="fab" onclick="openPublishModal()">+ Publicar</button>
+      <button class="small-btn" onclick="exportJSON()">Exportar JSON</button>
+      <button class="small-btn" onclick="triggerImport()">Importar JSON</button>
+    </div>
+  </div>
+
+  <!-- Mapa -->
+  <div class="card">
+    <div style="display:flex;gap:12px;align-items:center;justify-content:space-between">
+      <div>
+        <strong>Mapa interactivo — Santa Cruz de la Sierra</strong>
+        <div class="helper">El mapa está activo. Hacé click en él para autocompletar coordenadas al publicar.</div>
+      </div>
+      <div class="helper">Click en el mapa cuando publiques para autocompletar coordenadas.</div>
+    </div>
+    <div id="map" style="margin-top:12px"></div>
+  </div>
+
+  <div style="height:18px"></div>
+
+  <!-- Catálogo -->
+  <div class="card" style="margin-top:12px">
+    <strong>Catálogo de propiedades (demo 360)</strong>
+    <div id="listArea" class="grid-cards" style="margin-top:12px"></div>
+  </div>
+</main>
+
+<!-- Modal Publish / Edit -->
+<div id="modal" class="modal-back" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div id="modalTitle" style="font-weight:700">Publicar propiedad</div>
+      <div><button onclick="closeModal()" class="input" style="width:auto">Cerrar</button></div>
+    </div>
+
+    <form id="formPublish" onsubmit="event.preventDefault(); savePublishAndNavigate();">
+      <div style="display:grid;gap:8px;margin-top:12px">
+        <input id="fTitle" class="input" placeholder="Título (ej: Casa demo 360)" required>
+        <input id="fLocation" class="input" placeholder="Ubicación (ej: Equipetrol)" required>
+        <div style="display:flex;gap:8px">
+          <input id="fPrice" class="input" type="number" placeholder="Precio (USD)" required style="flex:1">
+          <input id="fType" class="input" placeholder="Tipo (Casa / Departamento)" required style="flex:1">
+        </div>
+        <textarea id="fDesc" class="input" placeholder="Descripción"></textarea>
+        <input id="fImages" class="input" placeholder="URLs de imágenes separadas por coma (opcional)">
+        <div style="display:flex;gap:8px">
+          <input id="fLat" class="input" placeholder="Latitud (opcional)" style="flex:1">
+          <input id="fLng" class="input" placeholder="Longitud (opcional)" style="flex:1">
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button type="button" class="input" onclick="closeModal()" style="width:auto">Cancelar</button>
+          <button id="saveBtn" class="input" style="width:auto">Publicar</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Pannellum (visor 360) -->
+<div id="pannellumModal" class="modal-back" onclick="closePano(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div id="panorama"></div>
+    <div id="pano-controls">
+      <div>
+        <div class="helper" id="panoTitle">Visor 360</div>
+        <div id="sceneThumbs"></div>
+      </div>
+      <div>
+        <button class="small-btn" onclick="closePano()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm delete -->
+<div id="confirmModal" class="modal-back" onclick="closeConfirm(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div style="font-weight:700">Eliminar propiedad</div>
+    <p class="helper">¿Confirmás eliminar esta propiedad?</p>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeConfirm()" class="input" style="width:auto">Cancelar</button>
+      <button onclick="confirmDelete()" class="input" style="width:auto">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<input id="fileImport" type="file" accept="application/json" style="display:none" />
+
+<script>
+/* =========== CONFIG (modo demo local) =========== */
+const STORAGE_KEY = 'bth_bth_demo_props_2025_v1';
+
+/* ---------- Panoramas demo: escenas 360 (usar imágenes públicas de ejemplo que funcionan con Pannellum) ----------
+  - Las escenas están nombradas según tu orden: patio, galeria, sala_comedor, habit_abajo, bano_ropero, cocina, segundo_piso_bano, habit_segundo_piso
+  - Reemplaza las URLs por tus propias imágenes 360 equirectangulares cuando las tengas.
+*/
+const PANORAMAS = {
+  patio: {
+    image: 'https://pannellum.org/images/cerro-toco-0.jpg',
+    title: 'Patio'
+  },
+  galeria: {
+    image: 'https://pannellum.org/images/bma-0.jpg',
+    title: 'Galería'
+  },
+  sala_comedor: {
+    image: 'https://pannellum.org/images/teide-sphere.jpg',
+    title: 'Sala y Comedor'
+  },
+  habit_abajo: {
+    image: 'https://pannellum.org/images/atscene.jpg',
+    title: 'Habitación de Abajo'
+  },
+  bano_ropero: {
+    image: 'https://pannellum.org/images/lighthouse.jpg',
+    title: 'Baño Privado y Ropero'
+  },
+  cocina: {
+    image: 'https://pannellum.org/images/alma.jpg',
+    title: 'Cocina'
+  },
+  segundo_piso_bano: {
+    image: 'https://pannellum.org/images/bryce-canyon.jpg',
+    title: 'Segundo Piso y Baño'
+  },
+  habit_segundo_piso: {
+    image: 'https://pannellum.org/images/toronto.jpg',
+    title: 'Habitación Segundo Piso'
+  }
+};
+
+/* Propiedad de ejemplo con 360 y coordenadas (Santa Cruz aproximado) */
+const demoProperty = {
+  id: 'P360-01',
+  title: 'Casa demo 360 — Equipetrol',
+  location: 'Equipetrol, Santa Cruz',
+  type: 'Casa',
+  price: 120000,
+  description: 'Recorrido 360 por Patio, Galería, Sala/Comedor, Habitación, Baño/Ropero, Cocina y segundo piso.',
+  images: [ PANORAMAS.patio.image ],
+  panoramas: PANORAMAS, // escenas
+  lat: -17.747589,
+  lng: -63.159806,
+  created: Date.now()
+};
+
+/* ---------- Estado ---------- */
+let properties = [];
+let markerCluster = null;
+let markerMap = {};
+let editingId = null;
+let pendingDelete = null;
+
+/* ---------- Helpers UI ---------- */
+function setError(msg){ const e=document.getElementById('errorBox'); if(!msg){ e.style.display='none'; e.innerText=''; } else { e.style.display='block'; e.innerText=msg; } }
+function uid(){ return 'p-'+Math.random().toString(36).slice(2,9)+'-'+Date.now().toString().slice(-4); }
+function esc(s){ return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function fmt(v){ return '$' + Number(v).toLocaleString(); }
+
+/* ---------- Storage (local demo) ---------- */
+function saveLocal(arr){ localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); }
+function loadLocal(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw){
+      properties = [ demoProperty ]; // por defecto solo la propiedad demo
+      saveLocal(properties);
+    } else {
+      properties = JSON.parse(raw);
+      // Si no hay propiedades, mantén la demo para mostrar ejemplo 360
+      if(!properties.length) { properties = [ demoProperty ]; saveLocal(properties); }
+    }
+  }catch(e){
+    properties = [ demoProperty ];
+    saveLocal(properties);
+  }
+}
+
+/* ---------- Map setup ---------- */
+const map = L.map('map', {preferCanvas:true}).setView([demoProperty.lat, demoProperty.lng], 14);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+markerCluster = L.markerClusterGroup(); map.addLayer(markerCluster);
+
+/* click to fill lat/lng in publish modal */
+map.on('click', e=>{
+  if(document.getElementById('modal').style.display === 'flex'){
+    document.getElementById('fLat').value = e.latlng.lat.toFixed(6);
+    document.getElementById('fLng').value = e.latlng.lng.toFixed(6);
+  }
+});
+
+/* ---------- Markers helpers ---------- */
+function clearMarkers(){ markerCluster.clearLayers(); markerMap = {}; }
+function addMarker(p){
+  if(!p || p.lat===undefined || p.lng===undefined || p.lat===null || p.lng===null) return;
+  if(markerMap[p.id]) return;
+  const m = L.marker([p.lat,p.lng]);
+  m.bindPopup(`<b>${esc(p.title)}</b><br>${esc(p.location)} · <small>${esc(p.type)}</small><br><b>${fmt(p.price)}</b><br><button onclick="goToMap('${p.id}')" style="margin-top:6px">Ir a la propiedad</button>`);
+  m.on('click', ()=>{ map.setView([p.lat,p.lng], 16); });
+  markerCluster.addLayer(m);
+  markerMap[p.id] = m;
+}
+
+/* ---------- Render catálogo ---------- */
+function renderList(list){
+  const wrap=document.getElementById('listArea'); wrap.innerHTML='';
+  const arr = list || properties;
+  if(!arr.length){ wrap.innerHTML = '<div class="helper">No hay propiedades. Publicá la primera.</div>'; return; }
+  arr.forEach(p=>{
+    const el = document.createElement('div'); el.className='prop';
+    el.innerHTML = `<div style="border-radius:10px;overflow:hidden;background:#fff;box-shadow:var(--shadow);display:flex;flex-direction:column">
+      <img loading="lazy" src="${esc((p.images && p.images.length)?p.images[0]:'https://pannellum.org/images/cerro-toco-0.jpg')}" alt="">
+      <div class="body">
+        <div style="display:flex;justify-content:space-between">
+          <div><div class="title">${esc(p.title)}</div><div class="meta">${esc(p.location)} · <span class="helper">${esc(p.type||'')}</span></div></div>
+          <div style="text-align:right"><div class="price">${fmt(p.price)}</div><div class="helper">${new Date(p.created||Date.now()).toLocaleString()}</div></div>
+        </div>
+        <div style="margin-top:8px" class="helper">${esc(p.description||'')}</div>
+        <div class="actions" style="margin-top:10px">
+          <button class="input" onclick="openPanoModal('${p.id}')" style="width:auto;background:#0f6ef0;color:#fff">Visor 360</button>
+          <button class="whatsapp" onclick="openWhatsApp('${p.id}')">WhatsApp</button>
+          <button class="input" onclick="startEdit('${p.id}')" style="width:auto;background:#f59e0b;color:#fff">Editar</button>
+          <button class="input" onclick="askDelete('${p.id}')" style="width:auto;background:var(--danger);color:#fff">Eliminar</button>
+          <button class="input" onclick="goToMap('${p.id}')" style="width:auto">Ir al mapa</button>
+        </div>
+      </div>
+    </div>`;
+    wrap.appendChild(el);
+  });
+}
+
+/* ---------- Open detail / map helpers ---------- */
+function goToMap(id){
+  const p = properties.find(x=>x.id===id); if(!p) return;
+  if(p.lat && p.lng){ map.setView([p.lat,p.lng],15); if(markerMap[id]) markerMap[id].openPopup(); } else alert('Esta propiedad no tiene coordenadas exactas.');
+}
+
+/* ---------- WhatsApp helper ---------- */
+function openWhatsApp(id){
+  const p = properties.find(x=>x.id===id); if(!p) return;
+  const number = '+59178247208'; // ejemplo
+  const num = number.replace(/\D/g,'');
+  const text = encodeURIComponent(`Hola, estoy interesado en: ${p.title} (${p.location}). Precio: ${p.price} USD`);
+  window.open(`https://wa.me/${num}?text=${text}`, '_blank');
+}
+
+/* ---------- Publish / Edit ---------- */
+function openPublishModal(){ editingId=null; document.getElementById('modalTitle').innerText='Publicar propiedad'; document.getElementById('formPublish').reset(); document.getElementById('modal').style.display='flex'; }
+function closeModal(e){ if(e) e.stopPropagation(); document.getElementById('modal').style.display='none'; editingId=null; }
+
+function startEdit(id){
+  const p = properties.find(x=>x.id===id); if(!p) return;
+  editingId = id;
+  document.getElementById('modalTitle').innerText = 'Editar propiedad';
+  document.getElementById('fTitle').value = p.title;
+  document.getElementById('fLocation').value = p.location;
+  document.getElementById('fPrice').value = p.price;
+  document.getElementById('fType').value = p.type;
+  document.getElementById('fDesc').value = p.description || '';
+  document.getElementById('fImages').value = (p.images || []).join(', ');
+  document.getElementById('fLat').value = p.lat || '';
+  document.getElementById('fLng').value = p.lng || '';
+  document.getElementById('modal').style.display = 'flex';
+}
+
+async function savePublishAndNavigate(){
+  const title = (document.getElementById('fTitle').value || '').trim();
+  const location = (document.getElementById('fLocation').value || '').trim();
+  const price = Number(document.getElementById('fPrice').value) || 0;
+  const type = (document.getElementById('fType').value || '').trim();
+  const desc = (document.getElementById('fDesc').value || '').trim();
+  const imgsRaw = (document.getElementById('fImages').value || '').trim();
+  const images = imgsRaw ? imgsRaw.split(',').map(s=>s.trim()).filter(Boolean) : [];
+  const lat = parseFloat(document.getElementById('fLat').value);
+  const lng = parseFloat(document.getElementById('fLng').value);
+  const hasCoords = !isNaN(lat) && !isNaN(lng);
+  if(!title || !location || !type){ alert('Completá título, ubicación y tipo'); return; }
+
+  if(editingId){
+    const p = properties.find(x=>x.id === editingId);
+    p.title = title; p.location = location; p.price = price; p.type = type; p.description = desc;
+    if(images.length) p.images = images;
+    if(hasCoords){ p.lat = lat; p.lng = lng; }
+    saveLocal(properties);
+    refreshAll();
+    closeModal();
+    alert('Propiedad actualizada.');
+    editingId = null;
+    goToMap(p.id);
+    return;
+  }
+
+  // Crear nueva propiedad
+  const id = uid();
+  const created = Date.now();
+  const p = { id, title, location, type, price, description: desc, images: images.length ? images : [PANORAMAS.patio.image], created };
+  if(hasCoords){ p.lat = lat; p.lng = lng; }
+  properties.unshift(p);
+  saveLocal(properties);
+  refreshAll();
+  closeModal();
+  alert('Propiedad publicada (local).');
+}
+
+/* ---------- Delete flow ---------- */
+function askDelete(id){ pendingDelete = id; document.getElementById('confirmModal').style.display='flex'; }
+function closeConfirm(e){ if(e) e.stopPropagation(); document.getElementById('confirmModal').style.display='none'; pendingDelete=null; }
+async function confirmDelete(){
+  if(!pendingDelete) return;
+  properties = properties.filter(p=>p.id !== pendingDelete);
+  saveLocal(properties);
+  refreshAll();
+  closeConfirm();
+  alert('Propiedad eliminada.');
+}
+
+/* ---------- Export / Import ---------- */
+function exportJSON(){ const data = JSON.stringify(properties, null, 2); const blob = new Blob([data], {type:'application/json'}); const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='propiedades.json'; a.click(); URL.revokeObjectURL(url); }
+function triggerImport(){ const inp=document.getElementById('fileImport'); inp.onchange = async e => { const f=e.target.files[0]; if(!f) return; try{ const txt = await f.text(); const json = JSON.parse(txt); if(!Array.isArray(json)) throw new Error('Formato inválido'); properties = json; saveLocal(properties); refreshAll(); alert('Importado a local con éxito.'); }catch(err){ alert('Error importando: '+err.message); } }; inp.click(); }
+
+/* ---------- Refresh ---------- */
+function refreshAll(){ clearMarkers(); properties.forEach(addMarker); renderList(properties); }
+
+/* ---------- Pannellum 360: abrir modal y crear escenas con hotspots + thumbnails ---------- */
+let pannellumViewer = null;
+function openPanoModal(propId){
+  const p = properties.find(x=>x.id===propId);
+  if(!p) { alert('Propiedad no encontrada'); return; }
+
+  // panoramas: si la propiedad tiene el campo panoramas lo usamos; si no, creamos uno simple
+  const panoramas = p.panoramas || { main: { image: (p.images && p.images[0]) || PANORAMAS.patio.image, title: p.title } };
+
+  // Build scenes object for pannellum
+  const scenes = {};
+  const keys = Object.keys(panoramas);
+  if(keys.length === 0){
+    keys.push('main');
+    panoramas.main = { image: (p.images && p.images[0]) || PANORAMAS.patio.image, title: p.title };
+  }
+
+  keys.forEach(k=>{
+    scenes[k] = {
+      title: panoramas[k].title || k,
+      type: 'equirectangular',
+      panorama: panoramas[k].image,
+      yaw: 0,
+      pitch: 0,
+      hfov: 110,
+      hotspots: []
+    };
+  });
+
+  // Crear hotspots simples para navegación circular y más naturales
+  if(keys.length > 1){
+    for(let i=0;i<keys.length;i++){
+      const from = keys[i];
+      const to = keys[(i+1)%keys.length];
+      scenes[from].hotspots.push({ pitch: 0, yaw: 90, type: 'scene', text: 'Ir a: ' + (panoramas[to].title || to), sceneId: to });
+      scenes[to].hotspots.push({ pitch: 0, yaw: -90, type: 'scene', text: 'Volver a: ' + (panoramas[from].title || from), sceneId: from });
+    }
+  }
+
+  const pannellumConfig = {
+    default: { firstScene: keys[0], sceneFadeDuration: 500 },
+    scenes: scenes
+  };
+
+  // Mostrar modal y crear viewer
+  document.getElementById('panoTitle').innerText = p.title + ' · Visor 360';
+  document.getElementById('pannellumModal').style.display = 'flex';
+  const container = document.getElementById('panorama');
+  container.innerHTML = '';
+  // Destroy previous if exists
+  try{ if(pannellumViewer && pannellumViewer.destroy) pannellumViewer.destroy(); pannellumViewer = null; }catch(e){}
+  pannellumViewer = pannellum.viewer('panorama', pannellumConfig);
+
+  // Build thumbnails
+  buildThumbnails(pannellumConfig);
+}
+
+function buildThumbnails(config){
+  const thumbs = document.getElementById('sceneThumbs');
+  thumbs.innerHTML = '';
+  const keys = Object.keys(config.scenes);
+  keys.forEach((k, idx) => {
+    const img = document.createElement('img');
+    img.src = config.scenes[k].panorama;
+    img.className = 'scene-thumb' + (idx===0 ? ' active' : '');
+    img.title = config.scenes[k].title;
+    img.onclick = () => {
+      if(pannellumViewer) pannellumViewer.loadScene(k);
+      document.querySelectorAll('.scene-thumb').forEach(t=>t.classList.remove('active'));
+      img.classList.add('active');
+    };
+    thumbs.appendChild(img);
+  });
+}
+
+function closePano(e){
+  if(e) e.stopPropagation();
+  document.getElementById('pannellumModal').style.display = 'none';
+  try{ if(pannellumViewer && pannellumViewer.destroy) pannellumViewer.destroy(); pannellumViewer = null; }catch(err){}
+}
+
+/* ---------- Init ---------- */
+(function init(){
+  loadLocal();
+  refreshAll();
+  // ensure the map marker for demo property is visible and popup works
+  // markers are added in refreshAll via addMarker
+})();
+</script>
+</body>
+</html>
