@@ -204,8 +204,8 @@ const PANORAMAS = {
 /* Propiedad de ejemplo con 360 y coordenadas (Santa Cruz aproximado) */
 const demoProperty = {
   id: 'P360-01',
-  title: 'Casa demo 360 — Equipetrol',
-  location: 'Equipetrol, Santa Cruz',
+  title: 'Casa demo 360 — 7°Anillo Av.Banzer',
+  location: '7°Anillo Av.Banzer, Santa Cruz',
   type: 'Casa',
   price: 120000,
   description: 'Recorrido 360 por Patio, Galería, Sala/Comedor, Habitación, Baño/Ropero, Cocina y segundo piso.',
@@ -249,7 +249,7 @@ function loadLocal(){
 }
 
 /* ---------- Map setup ---------- */
-const map = L.map('map', {preferCanvas:true}).setView([demoProperty.lat, demoProperty.lng], 14);
+const map = L.map('map', {preferCanvas:true}).setView([-17.747589, -63.159806], 14);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
 markerCluster = L.markerClusterGroup(); map.addLayer(markerCluster);
 
@@ -281,7 +281,7 @@ function renderList(list){
   arr.forEach(p=>{
     const el = document.createElement('div'); el.className='prop';
     el.innerHTML = `<div style="border-radius:10px;overflow:hidden;background:#fff;box-shadow:var(--shadow);display:flex;flex-direction:column">
-      <img loading="lazy" src="${esc((p.images && p.images.length)?p.images[0]:'https://pannellum.org/images/cerro-toco-0.jpg')}" alt="">
+      <img loading="lazy" src="${esc((p.images && p.images.length)?p.images[0]:'images/entrada1.jpeg')}" alt="">
       <div class="body">
         <div style="display:flex;justify-content:space-between">
           <div><div class="title">${esc(p.title)}</div><div class="meta">${esc(p.location)} · <span class="helper">${esc(p.type||'')}</span></div></div>
